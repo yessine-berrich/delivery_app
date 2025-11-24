@@ -15,14 +15,15 @@ class _HistoryPageState extends State<HistoryPage> {
   bool _isLoading = true;
   String _errorMessage = '';
   int? _currentUserId;
-  bool _didInit = false; // Flag pour s'assurer que l'initialisation ne se fait qu'une fois
+  bool _didInit =
+      false; // Flag pour s'assurer que l'initialisation ne se fait qu'une fois
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     // Récupérer l'ID utilisateur passé par ModalRoute
     final userId = ModalRoute.of(context)?.settings.arguments as int?;
-    
+
     // S'assurer que l'initialisation se fait une seule fois et que l'ID est valide
     if (!_didInit && userId != null) {
       _currentUserId = userId;
@@ -31,11 +32,11 @@ class _HistoryPageState extends State<HistoryPage> {
     }
     // Si l'utilisateur n'est pas passé, on affiche l'erreur immédiatement.
     if (userId == null && !_didInit) {
-       _didInit = true;
-       setState(() {
-         _errorMessage = 'ID utilisateur non fourni. Veuillez vous reconnecter.';
-         _isLoading = false;
-       });
+      _didInit = true;
+      setState(() {
+        _errorMessage = 'ID utilisateur non fourni. Veuillez vous reconnecter.';
+        _isLoading = false;
+      });
     }
   }
 
@@ -45,7 +46,8 @@ class _HistoryPageState extends State<HistoryPage> {
   Future<void> _fetchHistory() async {
     if (_currentUserId == null) {
       setState(() {
-        _errorMessage = 'ID utilisateur non fourni. Impossible de charger l\'historique.';
+        _errorMessage =
+            'ID utilisateur non fourni. Impossible de charger l\'historique.';
         _isLoading = false;
       });
       return;
@@ -82,11 +84,11 @@ class _HistoryPageState extends State<HistoryPage> {
             );
           }
         } else if (response.statusCode == 404) {
-             // Cas spécifique où l'API retourne 404 (implémenté dans la correction PHP)
-             setState(() {
-               _isLoading = false;
-               _commandes = []; // S'assurer que la liste est vide
-             });
+          // Cas spécifique où l'API retourne 404 (implémenté dans la correction PHP)
+          setState(() {
+            _isLoading = false;
+            _commandes = []; // S'assurer que la liste est vide
+          });
         } else {
           // Si l'API retourne un statut 'error'
           throw Exception(
@@ -115,7 +117,7 @@ class _HistoryPageState extends State<HistoryPage> {
   void _showPopUp(String title, String message, Color color) {
     // S'assurer que le widget est encore monté avant d'afficher le dialogue
     if (!mounted) return;
-    
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -225,14 +227,17 @@ class _HistoryPageState extends State<HistoryPage> {
         final commande = _commandes[index];
         final String statut = commande['statut'] ?? 'Inconnu';
         final String id = commande['commande_id']?.toString() ?? 'N/A';
-        
+
         // Utiliser la conversion sûre pour double
         final double total =
             double.tryParse(commande['total']?.toString() ?? '0.0') ?? 0.0;
+        final String address =
+            commande['adresse_livraison'] ?? 'Adresse non fournie';
         // Gérer le cas où 'date_commande' est null ou vide
         final String dateFull = commande['date_commande']?.toString() ?? 'N/A';
-        final String date = dateFull.length >= 10 ? dateFull.substring(0, 10) : dateFull;
-        
+        final String date =
+            dateFull.length >= 10 ? dateFull.substring(0, 10) : dateFull;
+
         final String details =
             commande['plats_details'] ?? 'Détails non disponibles';
 
@@ -320,6 +325,28 @@ class _HistoryPageState extends State<HistoryPage> {
                   ],
                 ),
                 const SizedBox(height: 15),
+                // Adresse de livraison
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.location_on,
+                      size: 16,
+                      color: Colors.blueAccent,
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        address,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
                 // Détails des plats
                 const Text(
                   'Articles:',

@@ -22,6 +22,7 @@ class Commande {
   final int id;
   final String date;
   final double total;
+  final String address;
   String statut; // Non final car nous le modifions dans l'UI
   final int userId;
   final String platsDetails;
@@ -30,6 +31,7 @@ class Commande {
     required this.id,
     required this.date,
     required this.total,
+    required this.address,
     required this.statut,
     required this.userId,
     required this.platsDetails,
@@ -41,6 +43,7 @@ class Commande {
       id: int.tryParse(json['commande_id']?.toString() ?? '0') ?? 0,
       date: json['date_commande'] as String? ?? 'N/A',
       total: double.tryParse(json['total']?.toString() ?? '0.0') ?? 0.0,
+      address: json['adresse_livraison'] as String? ?? 'Adresse non fournie',
       statut: json['statut'] as String? ?? 'Inconnu',
       userId: int.tryParse(json['user_id']?.toString() ?? '0') ?? 0,
       platsDetails: json['plats_details'] as String? ?? 'Aucun plat.',
@@ -178,10 +181,6 @@ class _OrdersManagementPageState extends State<OrdersManagementPage> {
   }
 
   Widget _buildOrderCard(Commande commande, int index) {
-    // Utiliser un StatefulWidget local pour gérer la sélection du statut sans setState global
-    // Cependant, dans ce cas précis, on gère la modification du statut via le modèle Commande (commande.statut)
-    // et on appelle setState sur la page parente si le statut est mis à jour localement.
-
     // Garder une référence locale pour le statut avant la mise à jour
     String currentSelectedStatus = commande.statut;
 
@@ -235,7 +234,18 @@ class _OrdersManagementPageState extends State<OrdersManagementPage> {
               style: const TextStyle(color: Colors.grey, fontSize: 14),
             ),
             const SizedBox(height: 12),
-
+            // Adresse de livraison - CORRECTION DE L'AFFICHAGE
+            Text(
+              'Adresse de Livraison: ${commande.address}',
+              style: const TextStyle(
+                fontWeight: FontWeight.w500,
+                color: Colors.black87,
+                fontSize: 15, // Légèrement plus grande pour être mise en valeur
+              ),
+              softWrap:
+                  true, // S'assure que le texte s'enroule sur plusieurs lignes
+            ),
+            const SizedBox(height: 10),
             // Détails des plats
             const Text(
               'Plats commandés:',
@@ -257,6 +267,7 @@ class _OrdersManagementPageState extends State<OrdersManagementPage> {
                 // Remplace ' | ' par des retours à la ligne pour une meilleure lisibilité
                 commande.platsDetails.replaceAll(' | ', '\n'),
                 style: const TextStyle(fontSize: 14, height: 1.4),
+                softWrap: true, // S'assure que le contenu s'enroule
               ),
             ),
 
@@ -299,7 +310,6 @@ class _OrdersManagementPageState extends State<OrdersManagementPage> {
                     onChanged: (String? newValue) {
                       if (newValue != null) {
                         // Mise à jour du statut dans le modèle de données local
-                        // pour l'afficher avant l'appel API
                         currentSelectedStatus = newValue;
                         commande.statut = newValue;
                         setState(

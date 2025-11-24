@@ -19,6 +19,15 @@ class _CartPageState extends State<CartPage> {
   bool _didInit =
       false; // Flag pour s'assurer que l'initialisation ne se fait qu'une fois
 
+  // Contrôleur pour le champ de saisie de l'adresse de livraison
+  final TextEditingController _addressController = TextEditingController();
+
+  @override
+  void dispose() {
+    _addressController.dispose();
+    super.dispose();
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -76,6 +85,7 @@ class _CartPageState extends State<CartPage> {
 
           // Calculer le total
           for (var item in items) {
+            // Utiliser le champ 'sous_total' pour le calcul du total
             final double sousTotal =
                 double.tryParse(item['sous_total']?.toString() ?? '0.0') ?? 0.0;
             calculatedTotal += sousTotal;
@@ -87,7 +97,7 @@ class _CartPageState extends State<CartPage> {
             _isLoading = false;
           });
         } else {
-          // Gérer le cas où le panier est vide (l'API devrait renvoyer une liste vide, mais gérons l'erreur aussi)
+          // Gérer le cas où le panier est vide ou l'API retourne un succès sans données
           setState(() {
             _isLoading = false;
             _cartItems = [];
@@ -115,7 +125,6 @@ class _CartPageState extends State<CartPage> {
 
     // Si la nouvelle quantité est 0, on appelle la suppression
     if (newQuantity <= 0) {
-      // Nous ne confirmons pas ici, _deleteItem s'en charge.
       _deleteItem(platId);
       return;
     }
@@ -124,52 +133,54 @@ class _CartPageState extends State<CartPage> {
     final index = _cartItems.indexWhere(
       (item) => int.tryParse(item['plat_id']?.toString() ?? '0') == platId,
     );
-    if (index != -1) {
-      // Sauvegarder l'ancienne quantité en cas d'échec
-      final oldQuantity =
-          int.tryParse(_cartItems[index]['quantite']?.toString() ?? '1') ?? 1;
+    if (index == -1) return;
 
-      setState(() {
-        _cartItems[index]['quantite'] =
-            newQuantity.toString(); // Mettre à jour l'affichage
-      });
+    // Sauvegarder l'ancienne quantité en cas d'échec
+    final oldQuantity =
+        int.tryParse(_cartItems[index]['quantite']?.toString() ?? '1') ?? 1;
 
-      var url = Uri.parse("${globals.baseUrl}panier_api.php");
+    setState(() {
+      _cartItems[index]['quantite'] = newQuantity.toString(); // Mise à jour UI
+    });
 
-      try {
-        final response = await http.put(
-          url,
-          headers: {'Content-Type': 'application/json'},
-          body: json.encode({
-            "user_id": _currentUserId,
-            "plat_id": platId,
-            "quantite": newQuantity,
-          }),
-        );
+    var url = Uri.parse("${globals.baseUrl}panier_api.php");
 
-        final Map<String, dynamic> data = jsonDecode(response.body);
+    try {
+      final response = await http.put(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          "user_id": _currentUserId,
+          "plat_id": platId,
+          "quantite": newQuantity,
+        }),
+      );
 
-        if (response.statusCode == 200 && data['status'] == 'success') {
-          _fetchCart(); // Recharger pour mettre à jour le total et le sous_total exacts
-        } else {
-          // Annuler l'optimistic update en cas d'erreur
-          setState(() {
-            _cartItems[index]['quantite'] = oldQuantity.toString();
-          });
-          throw Exception(data['message'] ?? "Erreur lors de la mise à jour.");
-        }
-      } catch (e) {
-        // Annuler l'optimistic update en cas d'échec
+      final Map<String, dynamic> data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data['status'] == 'success') {
+        _fetchCart(); // Recharger pour mettre à jour le total et le sous_total exacts
+      } else {
+        // Annuler l'optimistic update en cas d'erreur
         setState(() {
           _cartItems[index]['quantite'] = oldQuantity.toString();
         });
-        _showPopUp(
-          'Erreur de Mise à Jour',
-          e.toString().replaceFirst('Exception: ', ''),
-          Colors.red,
-        );
-        _fetchCart(); // Recharger pour synchroniser
+        throw Exception(data['message'] ?? "Erreur lors de la mise à jour.");
       }
+    } catch (e) {
+      // Annuler l'optimistic update en cas d'échec
+      if (mounted) {
+        setState(() {
+          _cartItems[index]['quantite'] = oldQuantity.toString();
+        });
+      }
+      _showPopUp(
+        'Erreur de Mise à Jour',
+        e.toString().replaceFirst('Exception: ', ''),
+        Colors.red,
+      );
+      // Recharger pour synchroniser même en cas d'échec d'optimistic update
+      _fetchCart();
     }
   }
 
@@ -207,20 +218,20 @@ class _CartPageState extends State<CartPage> {
     if (confirm != true) return; // Si l'utilisateur annule
 
     var url = Uri.parse("${globals.baseUrl}panier_api.php");
+    final index = _cartItems.indexWhere(
+      (item) => int.tryParse(item['plat_id']?.toString() ?? '0') == platId,
+    );
+    final Map<String, dynamic>? deletedItem =
+        index != -1 ? _cartItems[index] : null;
+
+    // Mettre à jour l'UI de manière optimiste pour un feedback rapide
+    if (deletedItem != null) {
+      setState(() {
+        _cartItems.removeAt(index);
+      });
+    }
 
     try {
-      // Mettre à jour l'UI de manière optimiste pour un feedback rapide
-      final index = _cartItems.indexWhere(
-        (item) => int.tryParse(item['plat_id']?.toString() ?? '0') == platId,
-      );
-      final Map<String, dynamic>? deletedItem =
-          index != -1 ? _cartItems[index] : null;
-      if (deletedItem != null) {
-        setState(() {
-          _cartItems.removeAt(index);
-        });
-      }
-
       final response = await http.delete(
         url,
         headers: {'Content-Type': 'application/json'},
@@ -247,6 +258,12 @@ class _CartPageState extends State<CartPage> {
       }
     } catch (e) {
       // Annuler l'optimistic update en cas d'échec
+      if (deletedItem != null) {
+        setState(() {
+          // Tenter de réinsérer l'élément à sa position initiale
+          _cartItems.insert(index, deletedItem);
+        });
+      }
       _showPopUp(
         'Erreur de Suppression',
         e.toString().replaceFirst('Exception: ', ''),
@@ -262,44 +279,103 @@ class _CartPageState extends State<CartPage> {
   Future<void> _checkout() async {
     if (_currentUserId == null || _cartItems.isEmpty || _isLoading) return;
 
-    final bool? confirm = await showDialog<bool>(
+    // Afficher le dialogue de confirmation AVEC champ de saisie d'adresse
+    final String? deliveryAddress = await showDialog<String>(
       context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Passer la Commande'),
-            content: Text(
-              'Confirmez-vous la commande pour un total de ${_totalAmount.toStringAsFixed(2)} € ?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Annuler'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text(
-                  'Confirmer',
-                  style: TextStyle(color: Colors.green),
+      builder: (context) {
+        // Pré-remplir l'adresse par défaut si disponible (sinon vide)
+        _addressController.text =
+            ''; // Vous pourriez charger une adresse par défaut ici
+
+        return AlertDialog(
+          title: const Text('Passer la Commande'),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: <Widget>[
+                Text(
+                  'Confirmez-vous la commande pour un total de ${_totalAmount.toStringAsFixed(2)} € ?',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
-              ),
-            ],
+                const SizedBox(height: 20),
+                const Text('Veuillez saisir l\'adresse de livraison:'),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _addressController,
+                  decoration: InputDecoration(
+                    labelText: 'Adresse de Livraison',
+                    hintText: 'Ex: 12 Rue de la Liberté, 75001 Paris',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8.0),
+                    ),
+                  ),
+                  keyboardType: TextInputType.streetAddress,
+                  maxLines: 2,
+                ),
+              ],
+            ),
           ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                _addressController.clear(); // Vider si annulation
+                Navigator.pop(context, null); // Retourne null si annulé
+              },
+              child: const Text('Annuler'),
+            ),
+            // Utiliser Builder pour gérer la validation et le pop en cas d'erreur
+            Builder(
+              builder:
+                  (innerContext) => ElevatedButton(
+                    onPressed: () {
+                      final address = _addressController.text.trim();
+                      if (address.isEmpty) {
+                        // Utiliser un SnackBar ou un PopUp temporaire
+                        // Ne pas utiliser _showPopUp car cela interfère avec le dialogue actuel
+                        ScaffoldMessenger.of(innerContext).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'L\'adresse de livraison est obligatoire.',
+                            ),
+                            backgroundColor: Colors.orange,
+                          ),
+                        );
+                      } else {
+                        Navigator.pop(context, address); // Retourne l'adresse
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).primaryColor,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('Confirmer & Payer'),
+                  ),
+            ),
+          ],
+        );
+      },
     );
 
-    if (confirm != true) return;
+    if (deliveryAddress == null || deliveryAddress.isEmpty) {
+      // L'utilisateur a annulé ou n'a pas saisi d'adresse (la validation dans le dialogue gère l'adresse vide)
+      return;
+    }
 
     setState(() {
       _isLoading = true;
     }); // Afficher le loader pendant le checkout
 
-    // Envoi de l'ID utilisateur à commande_api.php pour finaliser
+    // Envoi de l'ID utilisateur ET l'adresse à commande_api.php pour finaliser
     var url = Uri.parse("${globals.baseUrl}commande_api.php");
 
     try {
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({"user_id": _currentUserId}),
+        body: json.encode({
+          // Les données sont maintenant correctement gérées côté PHP
+          "user_id": _currentUserId,
+          "adresse_livraison": deliveryAddress,
+        }),
       );
 
       final Map<String, dynamic> data = jsonDecode(response.body);
@@ -308,7 +384,7 @@ class _CartPageState extends State<CartPage> {
         _showPopUp(
           'Commande Passée!',
           data['message'] ??
-              'Votre commande a été enregistrée et le panier est vide.',
+              'Votre commande a été enregistrée à l\'adresse: $deliveryAddress.',
           Colors.green,
         );
         _fetchCart(); // Le panier doit être vide après la commande
@@ -324,9 +400,12 @@ class _CartPageState extends State<CartPage> {
         Colors.red,
       );
     } finally {
-      setState(() {
-        _isLoading = false;
-      }); // Arrêter le loader
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        }); // Arrêter le loader
+      }
+      _addressController.clear(); // Vider le champ après tentative
     }
   }
 
