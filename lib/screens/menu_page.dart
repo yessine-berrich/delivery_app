@@ -184,6 +184,7 @@ class _MenuPageState extends State<MenuPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('Catalogue des Plats'),
         actions: [
           // Bouton Panier

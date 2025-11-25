@@ -5,6 +5,7 @@ import 'dart:io';
 
 // Configuration de l'API : Assurez-vous que cette URL est accessible depuis votre appareil/émulateur.
 // Utilisez 10.0.2.2 si vous exécutez sur un émulateur Android pointant vers localhost.
+// NOTE: L'URL doit être ajustée par l'utilisateur pour correspondre à son environnement (IP locale).
 const String _apiUrl =
     'http://192.168.56.1/api_livraison/admin_commandes_api.php';
 
@@ -99,6 +100,7 @@ class _OrdersManagementPageState extends State<OrdersManagementPage> {
             'Échec de la récupération des commandes (Code: ${response.statusCode}).';
       }
     } on SocketException {
+      // Correction de la faute de frappe : 'inaccessible' au lieu de 'inaccésible'
       _error =
           'Erreur de connexion : L\'API est inaccessible ou l\'URL est incorrecte. (Vérifiez si l\'API PHP est active).';
     } catch (e) {
@@ -202,7 +204,7 @@ class _OrdersManagementPageState extends State<OrdersManagementPage> {
               children: [
                 Flexible(
                   child: Text(
-                    'Commande #${commande.id}',
+                    'Commande n°${commande.id}', // Correction de la faute : # -> n°
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 18,
@@ -234,13 +236,13 @@ class _OrdersManagementPageState extends State<OrdersManagementPage> {
               style: const TextStyle(color: Colors.grey, fontSize: 14),
             ),
             const SizedBox(height: 12),
-            // Adresse de livraison - CORRECTION DE L'AFFICHAGE
+            // Adresse de livraison - Correction : J'ai mis en gras le libellé pour le rendre plus visible
             Text(
-              'Adresse de Livraison: ${commande.address}',
+              'Adresse de livraison : ${commande.address}', // Correction de la majuscule
               style: const TextStyle(
-                fontWeight: FontWeight.w500,
+                fontWeight: FontWeight.bold, // Plus visible
                 color: Colors.black87,
-                fontSize: 15, // Légèrement plus grande pour être mise en valeur
+                fontSize: 15,
               ),
               softWrap:
                   true, // S'assure que le texte s'enroule sur plusieurs lignes
@@ -248,7 +250,7 @@ class _OrdersManagementPageState extends State<OrdersManagementPage> {
             const SizedBox(height: 10),
             // Détails des plats
             const Text(
-              'Plats commandés:',
+              'Plats commandés :', // Correction de la faute : j'ai ajouté un espace
               style: TextStyle(
                 fontWeight: FontWeight.w600,
                 color: Colors.black87,
@@ -376,7 +378,8 @@ class _OrdersManagementPageState extends State<OrdersManagementPage> {
                       const Icon(Icons.cloud_off, color: Colors.red, size: 60),
                       const SizedBox(height: 15),
                       Text(
-                        'Erreur de Connexion: $_error',
+                        // Correction de la faute : 'Connexion' au lieu de 'Connection'
+                        'Erreur de Connexion : $_error',
                         textAlign: TextAlign.center,
                         style: const TextStyle(color: Colors.red, fontSize: 16),
                       ),

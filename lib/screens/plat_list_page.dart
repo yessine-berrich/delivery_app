@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../globals.dart' as globals;
+import '../../globals.dart' as globals;
+// Importation de PlatFormPage n'est pas nécessaire ici, seulement du modèle Plat
 
 // ----------------------------------------------------
 // 1. MODÈLE DE DONNÉES (MATCH PHP)
@@ -136,11 +137,13 @@ class _PlatListPageState extends State<PlatListPage> {
         final Map<String, dynamic> responseBody = json.decode(response.body);
 
         if (response.statusCode == 200 && responseBody['status'] == 'success') {
+          // Utiliser une SnackBar pour la suppression (car on reste sur la même page)
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
                 responseBody['message'] ?? 'Plat supprimé avec succès.',
               ),
+              backgroundColor: Colors.green,
             ),
           );
           _fetchPlats(); // Rafraîchir la liste après suppression
@@ -150,6 +153,7 @@ class _PlatListPageState extends State<PlatListPage> {
               content: Text(
                 'Erreur de suppression: ${response.statusCode} - ${responseBody['message']}',
               ),
+              backgroundColor: Colors.red,
             ),
           );
         }
@@ -157,6 +161,7 @@ class _PlatListPageState extends State<PlatListPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Erreur de connexion lors de la suppression: $e'),
+            backgroundColor: Colors.red,
           ),
         );
       }
@@ -173,15 +178,9 @@ class _PlatListPageState extends State<PlatListPage> {
       result,
     ) {
       // Si le formulaire revient avec 'true', on rafraîchit la liste
+      // Le message de succès sera affiché via la pop-up du formulaire AVANT le pop
       if (result == true) {
         _fetchPlats(); 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Plat ${plat == null ? "ajouté" : "mis à jour"} avec succès. Actualisation de la liste.',
-            ),
-          ),
-        );
       }
     });
   }
