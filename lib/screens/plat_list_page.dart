@@ -25,7 +25,9 @@ class Plat {
   // Factory constructor pour créer un Plat à partir d'un map JSON
   factory Plat.fromJson(Map<String, dynamic> json) {
     return Plat(
-      id: json['plat_id']?.toString() ?? '', // Convertit l'ID en String, ou vide si null
+      id:
+          json['plat_id']?.toString() ??
+          '', // Convertit l'ID en String, ou vide si null
       nom: json['nom'] ?? 'Nom Inconnu',
       description: json['description'] ?? '',
       prix: double.tryParse(json['prix']?.toString() ?? '0.0') ?? 0.0,
@@ -79,7 +81,8 @@ class _PlatListPageState extends State<PlatListPage> {
         } else {
           setState(() {
             _error =
-                responseBody['message'] ?? 'Erreur inconnue lors du chargement des données.';
+                responseBody['message'] ??
+                'Erreur inconnue lors du chargement des données.';
           });
         }
       } else {
@@ -172,7 +175,8 @@ class _PlatListPageState extends State<PlatListPage> {
   void _editPlat(Plat? plat) {
     // Crée un objet Plat par défaut si plat est null (pour un ajout)
     final Plat platToPass =
-        plat ?? Plat(id: '', nom: '', description: '', prix: 0.0, categorie: '');
+        plat ??
+        Plat(id: '', nom: '', description: '', prix: 0.0, categorie: '');
 
     Navigator.pushNamed(context, '/plat_form', arguments: platToPass).then((
       result,
@@ -180,7 +184,7 @@ class _PlatListPageState extends State<PlatListPage> {
       // Si le formulaire revient avec 'true', on rafraîchit la liste
       // Le message de succès sera affiché via la pop-up du formulaire AVANT le pop
       if (result == true) {
-        _fetchPlats(); 
+        _fetchPlats();
       }
     });
   }
@@ -195,7 +199,8 @@ class _PlatListPageState extends State<PlatListPage> {
           IconButton(
             icon: const Icon(Icons.add_circle_outline, color: Colors.white),
             tooltip: 'Ajouter un nouveau plat',
-            onPressed: () => _editPlat(null), // Appel sans argument pour l'ajout
+            onPressed:
+                () => _editPlat(null), // Appel sans argument pour l'ajout
           ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
