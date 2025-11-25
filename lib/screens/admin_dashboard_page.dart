@@ -67,7 +67,7 @@ class AdminDashboardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Récupérer l'ID utilisateur passé par la route (si nécessaire)
-    final userId = ModalRoute.of(context)?.settings.arguments;
+    // final userId = ModalRoute.of(context)?.settings.arguments;
 
     return Scaffold(
       appBar: AppBar(
@@ -81,7 +81,7 @@ class AdminDashboardPage extends StatelessWidget {
           children: <Widget>[
             // En-tête de bienvenue
             Text(
-              'Bienvenue Admin ${userId ?? ''}',
+              'Bienvenue Admin',
               style: const TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
@@ -101,7 +101,7 @@ class AdminDashboardPage extends StatelessWidget {
             _buildAdminButton(
               context,
               icon: Icons.restaurant_menu,
-              text: 'Gérer le Menu (Ajout, Modification, Suppression)',
+              text: 'Gérer le Menu',
               description:
                   'Voir la liste de tous les plats existants pour édition, suppression ou ajout de nouveaux plats.',
               onPressed: () {
@@ -162,14 +162,14 @@ class AdminDashboardPage extends StatelessWidget {
             const SizedBox(height: 15),
 
             // Bouton de Retour (pour l'expérience client)
-            TextButton.icon(
-              onPressed: () {
-                // Retour au menu principal (pour tester l'expérience client)
-                Navigator.pop(context);
-              },
-              icon: const Icon(Icons.arrow_back, color: Colors.blueAccent),
-              label: const Text('Retour au Menu Client'),
-            ),
+            // TextButton.icon(
+            //   onPressed: () {
+            //     // Retour au menu principal (pour tester l'expérience client)
+            //     Navigator.pop(context);
+            //   },
+            //   icon: const Icon(Icons.arrow_back, color: Colors.blueAccent),
+            //   label: const Text('Retour au Menu Client'),
+            // ),
           ],
         ),
       ),

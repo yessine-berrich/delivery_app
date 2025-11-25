@@ -3,11 +3,6 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../globals.dart' as globals;
 
-// ---
-// NOTE: Ce widget est un StatefulWidget pour gérer le chargement des données (CRUD Read)
-// et l'état de l'utilisateur.
-// ---
-
 class MenuPage extends StatefulWidget {
   const MenuPage({super.key});
 
@@ -38,6 +33,18 @@ class _MenuPageState extends State<MenuPage> {
     if (_currentUserId != null && _plats.isEmpty) {
       _fetchMenu();
     }
+  }
+
+  // Fonction de déconnexion ajoutée
+  void _logout() {
+    setState(() {
+      _currentUserId = null;
+    });
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      '/home',
+      (Route<dynamic> route) => false,
+    );
   }
 
   // --------------------------------------------------------------------------
@@ -199,6 +206,12 @@ class _MenuPageState extends State<MenuPage> {
               );
             },
           ),
+          // NOUVEAU: Bouton de Déconnexion
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Déconnexion',
+            onPressed: _logout, // Appel de la nouvelle fonction
+          ),
         ],
       ),
       body: _buildBody(),
@@ -284,7 +297,6 @@ class _MenuPageState extends State<MenuPage> {
             ],
           ),
 
-          // 🎯 CORRECTION CLÉ: Navigation vers la page de détails
           onTap: () {
             // Envoi du Map contenant le plat ET l'ID utilisateur
             Navigator.pushNamed(
