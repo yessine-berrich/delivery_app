@@ -1,4 +1,3 @@
-// lib/screens/register_page.dart
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -12,6 +11,10 @@ class RegisterPage extends StatefulWidget {
 }
 
 class _RegisterPageState extends State<RegisterPage> {
+  // Définition des couleurs pour la cohérence du thème
+  static const Color primaryColor = Color(0xFF1E88E5); // Blue 600
+  static const Color accentColor = Color(0xFF4FC3F7); // Light Blue 300
+
   // Clé pour la validation du formulaire
   final _formKey = GlobalKey<FormState>();
 
@@ -51,6 +54,7 @@ class _RegisterPageState extends State<RegisterPage> {
               _passwordController.text
                   .trim(), // Le mot de passe clair sera haché par PHP
           "adresse": _adresseController.text.trim(),
+          // Le rôle sera 'client' par défaut côté PHP
         }),
       );
 
@@ -63,13 +67,14 @@ class _RegisterPageState extends State<RegisterPage> {
         // Afficher Pop-up de succès (Exigence Projet)
         _showPopUp(
           'Inscription Réussie 🎉',
-          'Votre compte a été créé avec succès. ID: $userId. Vous pouvez maintenant vous connecter.',
+          'Votre compte a été créé avec succès (ID: $userId). Vous pouvez maintenant vous connecter.',
           Colors.green,
         );
 
         // Retourner à la page de connexion après succès
         if (mounted) {
-          // Utilisation de pop() pour retourner à LoginPage (qui est la route '/')
+          // Utilisation de pop() pour retourner à LoginPage (qui est la route '/login')
+          // Note : on utilise pop jusqu'à la route nommée '/login' pour éviter les problèmes si la navigation est profonde
           Navigator.popUntil(context, ModalRoute.withName('/login'));
         }
       } else {
@@ -78,10 +83,10 @@ class _RegisterPageState extends State<RegisterPage> {
         _showPopUp("Erreur d'Inscription", message, Colors.red);
       }
     } catch (e) {
-      // Erreur réseau (très probablement un problème d'IP/CORS si vous voyez ce message)
+      // Erreur réseau
       _showPopUp(
         "Erreur Serveur",
-        "Impossible de contacter le serveur. Veuillez vérifier votre connexion.",
+        "Impossible de contacter le serveur. Veuillez vérifier votre connexion. Erreur: $e",
         Colors.red,
       );
     } finally {
@@ -94,13 +99,16 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   // --------------------------------------------------------------------------
-  // Fenêtre Pop-up (Exigence Projet)
+  // Fenêtre Pop-up (Améliorée)
   // --------------------------------------------------------------------------
   void _showPopUp(String title, String message, Color color) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
+          ),
           title: Text(
             title,
             style: TextStyle(color: color, fontWeight: FontWeight.bold),
@@ -108,7 +116,7 @@ class _RegisterPageState extends State<RegisterPage> {
           content: Text(message),
           actions: <Widget>[
             TextButton(
-              child: const Text('OK'),
+              child: const Text('OK', style: TextStyle(color: primaryColor)),
               onPressed: () {
                 Navigator.of(context).pop();
               },
@@ -116,6 +124,31 @@ class _RegisterPageState extends State<RegisterPage> {
           ],
         );
       },
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // Design des Champs de Texte (Cohérent avec LoginPage)
+  // --------------------------------------------------------------------------
+  InputDecoration _getInputDecoration(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      hintText: 'Entrez votre $label',
+      prefixIcon: Icon(icon, color: primaryColor),
+      fillColor: accentColor.withOpacity(0.1), // Arrière-plan coloré léger
+      filled: true,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12), // Coins arrondis
+        borderSide: BorderSide.none, // Suppression du bord par défaut
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(
+          color: primaryColor,
+          width: 2,
+        ), // Bordure bleue lors du focus
+      ),
+      contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
     );
   }
 
@@ -131,63 +164,87 @@ class _RegisterPageState extends State<RegisterPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("S'inscrire")),
+      appBar: AppBar(
+        title: const Text(
+          "Créer un Compte",
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: Colors.black87,
+      ),
       body: Center(
         child: Form(
           key: _formKey, // Clé de validation
           child: SingleChildScrollView(
             child: Padding(
-              padding: const EdgeInsets.all(20.0),
+              padding: const EdgeInsets.all(30.0), // Padding généreux
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(
-                    Icons.person_add,
-                    size: 80,
-                    color: Colors.blueAccent,
+                  // Icône
+                  const Center(
+                    child: Icon(
+                      Icons
+                          .assignment_ind_outlined, // Icône d'inscription plus spécifique
+                      size: 90,
+                      color: primaryColor,
+                    ),
                   ),
+                  const SizedBox(height: 15),
+
+                  // Titre
                   const Text(
-                    "Créer un Compte",
-                    style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
+                    "Devenez membre en quelques secondes",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
                   ),
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 40),
 
                   // Champ Nom Complet
                   TextFormField(
                     controller: _nomController,
                     decoration: _getInputDecoration(
                       'Nom Complet',
-                      Icons.person,
+                      Icons.person_outline,
                     ),
+                    textCapitalization: TextCapitalization.words,
                     validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Le nom est obligatoire.';
+                      if (value == null || value.isEmpty || value.length < 3) {
+                        return 'Veuillez entrer un nom complet valide.';
                       }
                       return null;
                     },
                   ),
-                  const SizedBox(height: 15),
+                  const SizedBox(height: 20),
 
                   // Champ Email (Validation)
                   TextFormField(
                     controller: _emailController,
-                    decoration: _getInputDecoration('Email', Icons.email),
+                    decoration: _getInputDecoration(
+                      'Email',
+                      Icons.email_outlined,
+                    ),
                     keyboardType: TextInputType.emailAddress,
                     validator: (value) {
                       if (value == null ||
                           !value.contains('@') ||
-                          value.length < 5) {
+                          !value.contains('.')) {
                         return 'Veuillez entrer un email valide.';
                       }
                       return null;
                     },
                   ),
-                  const SizedBox(height: 15),
+                  const SizedBox(height: 20),
 
                   // Champ Mot de passe (Validation)
                   TextFormField(
                     controller: _passwordController,
-                    decoration: _getInputDecoration('Mot de passe', Icons.lock),
+                    decoration: _getInputDecoration(
+                      'Mot de passe',
+                      Icons.lock_outline,
+                    ),
                     obscureText: true,
                     validator: (value) {
                       if (value == null || value.length < 6) {
@@ -196,36 +253,61 @@ class _RegisterPageState extends State<RegisterPage> {
                       return null;
                     },
                   ),
-                  const SizedBox(height: 15),
+                  const SizedBox(height: 20),
 
                   // Champ Adresse (Optionnel)
                   TextFormField(
                     controller: _adresseController,
                     decoration: _getInputDecoration(
                       'Adresse (Optionnel)',
-                      Icons.location_on,
+                      Icons.location_on_outlined,
                     ),
                     keyboardType: TextInputType.streetAddress,
                   ),
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 50),
 
                   // Bouton d'inscription
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _register,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 15),
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : _register,
+                    style: ElevatedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: primaryColor,
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child:
-                          _isLoading
-                              ? const CircularProgressIndicator(
+                      elevation: 5,
+                    ),
+                    child:
+                        _isLoading
+                            ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
                                 color: Colors.white,
-                              )
-                              : const Text(
-                                "S'inscrire",
-                                style: TextStyle(fontSize: 18),
+                                strokeWidth: 2.5,
                               ),
+                            )
+                            : const Text(
+                              "S'inscrire",
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                  ),
+
+                  // Lien vers la connexion
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context); // Retourne à la LoginPage
+                    },
+                    child: Text(
+                      "Déjà un compte ? Se Connecter",
+                      style: TextStyle(
+                        color: primaryColor,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
@@ -234,16 +316,6 @@ class _RegisterPageState extends State<RegisterPage> {
           ),
         ),
       ),
-    );
-  }
-
-  // Fonction utilitaire pour le style des champs
-  InputDecoration _getInputDecoration(String label, IconData icon) {
-    return InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(icon, color: Colors.blueAccent),
-      border: const OutlineInputBorder(),
-      contentPadding: const EdgeInsets.symmetric(vertical: 15, horizontal: 10),
     );
   }
 }

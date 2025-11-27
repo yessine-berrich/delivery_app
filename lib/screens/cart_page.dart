@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import '../globals.dart' as globals;
+import '../globals.dart' as globals; // Assurez-vous que ce fichier existe
 
 class CartPage extends StatefulWidget {
   const CartPage({super.key});
@@ -16,11 +16,12 @@ class _CartPageState extends State<CartPage> {
   String _errorMessage = '';
   int? _currentUserId;
   double _totalAmount = 0.0;
-  bool _didInit =
-      false; // Flag pour s'assurer que l'initialisation ne se fait qu'une fois
 
-  // Contrôleur pour le champ de saisie de l'adresse de livraison
+  // Contrôleur pour le champ de saisie de l'adresse de livraison dans le dialogue de commande
   final TextEditingController _addressController = TextEditingController();
+
+  // Flag pour s'assurer que l'initialisation des données de l'utilisateur ne se fait qu'une seule fois
+  bool _isDataInitialized = false;
 
   @override
   void dispose() {
@@ -31,17 +32,23 @@ class _CartPageState extends State<CartPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Récupérer l'ID utilisateur passé par ModalRoute
+
+    // Initialisation unique des données dépendant du contexte (comme les arguments de route)
+    if (!_isDataInitialized) {
+      _initializeData();
+    }
+  }
+
+  // Méthode pour centraliser la logique d'initialisation
+  void _initializeData() {
+    _isDataInitialized = true;
     final userId = ModalRoute.of(context)?.settings.arguments as int?;
 
-    if (!_didInit && userId != null) {
+    if (userId != null) {
       _currentUserId = userId;
-      _didInit = true;
       _fetchCart();
-    }
-    // Si l'utilisateur n'est pas passé, on affiche l'erreur immédiatement.
-    if (userId == null && !_didInit) {
-      _didInit = true;
+    } else {
+      // Si l'ID utilisateur est manquant, on ne peut pas charger le panier
       setState(() {
         _errorMessage = 'ID utilisateur non fourni. Veuillez vous reconnecter.';
         _isLoading = false;
@@ -83,9 +90,8 @@ class _CartPageState extends State<CartPage> {
               List<Map<String, dynamic>>.from(data['data']);
           double calculatedTotal = 0.0;
 
-          // Calculer le total
+          // Calculer le total en utilisant 'sous_total'
           for (var item in items) {
-            // Utiliser le champ 'sous_total' pour le calcul du total
             final double sousTotal =
                 double.tryParse(item['sous_total']?.toString() ?? '0.0') ?? 0.0;
             calculatedTotal += sousTotal;
@@ -97,12 +103,12 @@ class _CartPageState extends State<CartPage> {
             _isLoading = false;
           });
         } else {
-          // Gérer le cas où le panier est vide ou l'API retourne un succès sans données
+          // Panier vide ou API retourne un succès sans données
           setState(() {
             _isLoading = false;
             _cartItems = [];
           });
-          //throw Exception(data['message'] ?? 'Erreur lors du chargement du panier.');
+          // Note : Pas besoin de 'throw Exception' si le panier est simplement vide
         }
       } else {
         throw Exception('Erreur de serveur: Code ${response.statusCode}');
@@ -123,24 +129,26 @@ class _CartPageState extends State<CartPage> {
   Future<void> _updateQuantity(int platId, int newQuantity) async {
     if (_currentUserId == null || platId == 0) return;
 
-    // Si la nouvelle quantité est 0, on appelle la suppression
+    // Si la nouvelle quantité est 0 ou moins, on appelle la suppression
     if (newQuantity <= 0) {
       _deleteItem(platId);
       return;
     }
 
-    // Mettre à jour l'état local immédiatement pour une meilleure réactivité (Optimistic UI update)
+    // Trouver l'index de l'article pour la mise à jour optimiste
     final index = _cartItems.indexWhere(
       (item) => int.tryParse(item['plat_id']?.toString() ?? '0') == platId,
     );
     if (index == -1) return;
 
-    // Sauvegarder l'ancienne quantité en cas d'échec
-    final oldQuantity =
-        int.tryParse(_cartItems[index]['quantite']?.toString() ?? '1') ?? 1;
+    // Sauvegarder l'ancienne quantité et l'ancien sous-total en cas d'échec
+    final oldItem = Map<String, dynamic>.from(_cartItems[index]);
 
+    // Optimistic UI update: mettre à jour la quantité localement
     setState(() {
-      _cartItems[index]['quantite'] = newQuantity.toString(); // Mise à jour UI
+      _cartItems[index]['quantite'] = newQuantity.toString();
+      // On ne met pas à jour le sous-total ici, on attend la resynchronisation
+      // pour que le calcul soit exact et basé sur le serveur.
     });
 
     var url = Uri.parse("${globals.baseUrl}panier_api.php");
@@ -159,19 +167,22 @@ class _CartPageState extends State<CartPage> {
       final Map<String, dynamic> data = jsonDecode(response.body);
 
       if (response.statusCode == 200 && data['status'] == 'success') {
-        _fetchCart(); // Recharger pour mettre à jour le total et le sous_total exacts
+        // Succès: resynchroniser pour obtenir le total et le sous-total exacts
+        _fetchCart();
       } else {
         // Annuler l'optimistic update en cas d'erreur
-        setState(() {
-          _cartItems[index]['quantite'] = oldQuantity.toString();
-        });
+        if (mounted) {
+          setState(() {
+            _cartItems[index] = oldItem;
+          });
+        }
         throw Exception(data['message'] ?? "Erreur lors de la mise à jour.");
       }
     } catch (e) {
-      // Annuler l'optimistic update en cas d'échec
+      // Annuler l'optimistic update en cas d'échec de l'appel HTTP
       if (mounted) {
         setState(() {
-          _cartItems[index]['quantite'] = oldQuantity.toString();
+          _cartItems[index] = oldItem;
         });
       }
       _showPopUp(
@@ -179,7 +190,7 @@ class _CartPageState extends State<CartPage> {
         e.toString().replaceFirst('Exception: ', ''),
         Colors.red,
       );
-      // Recharger pour synchroniser même en cas d'échec d'optimistic update
+      // Recharger pour synchroniser l'état réel du serveur
       _fetchCart();
     }
   }
@@ -190,7 +201,7 @@ class _CartPageState extends State<CartPage> {
   Future<void> _deleteItem(int platId) async {
     if (_currentUserId == null || platId == 0) return;
 
-    // Demander confirmation avant suppression (Exigence Pop-up)
+    // Demander confirmation avant suppression
     final bool? confirm = await showDialog<bool>(
       context: context,
       builder:
@@ -221,10 +232,11 @@ class _CartPageState extends State<CartPage> {
     final index = _cartItems.indexWhere(
       (item) => int.tryParse(item['plat_id']?.toString() ?? '0') == platId,
     );
+    // Copie de l'élément avant suppression optimiste
     final Map<String, dynamic>? deletedItem =
-        index != -1 ? _cartItems[index] : null;
+        index != -1 ? Map<String, dynamic>.from(_cartItems[index]) : null;
 
-    // Mettre à jour l'UI de manière optimiste pour un feedback rapide
+    // Mettre à jour l'UI de manière optimiste
     if (deletedItem != null) {
       setState(() {
         _cartItems.removeAt(index);
@@ -246,10 +258,10 @@ class _CartPageState extends State<CartPage> {
           'L\'article a été retiré du panier.',
           Colors.green,
         );
-        _fetchCart(); // Recharger le panier pour s'assurer que le total est correct
+        _fetchCart(); // Recharger le panier pour mettre à jour le total
       } else {
         // Annuler l'optimistic update en cas d'erreur
-        if (deletedItem != null) {
+        if (deletedItem != null && mounted) {
           setState(() {
             _cartItems.insert(index, deletedItem);
           });
@@ -257,10 +269,9 @@ class _CartPageState extends State<CartPage> {
         throw Exception(data['message'] ?? "Erreur lors de la suppression.");
       }
     } catch (e) {
-      // Annuler l'optimistic update en cas d'échec
-      if (deletedItem != null) {
+      // Annuler l'optimistic update en cas d'échec de l'appel HTTP
+      if (deletedItem != null && mounted) {
         setState(() {
-          // Tenter de réinsérer l'élément à sa position initiale
           _cartItems.insert(index, deletedItem);
         });
       }
@@ -269,7 +280,7 @@ class _CartPageState extends State<CartPage> {
         e.toString().replaceFirst('Exception: ', ''),
         Colors.red,
       );
-      _fetchCart(); // Recharger pour synchroniser
+      _fetchCart(); // Recharger pour synchroniser l'état réel du serveur
     }
   }
 
@@ -279,14 +290,13 @@ class _CartPageState extends State<CartPage> {
   Future<void> _checkout() async {
     if (_currentUserId == null || _cartItems.isEmpty || _isLoading) return;
 
+    // Réinitialiser le contrôleur d'adresse à chaque ouverture
+    _addressController.clear();
+
     // Afficher le dialogue de confirmation AVEC champ de saisie d'adresse
     final String? deliveryAddress = await showDialog<String>(
       context: context,
       builder: (context) {
-        // Pré-remplir l'adresse par défaut si disponible (sinon vide)
-        _addressController.text =
-            ''; // Vous pourriez charger une adresse par défaut ici
-
         return AlertDialog(
           title: const Text('Passer la Commande'),
           content: SingleChildScrollView(
@@ -317,20 +327,18 @@ class _CartPageState extends State<CartPage> {
           actions: <Widget>[
             TextButton(
               onPressed: () {
-                _addressController.clear(); // Vider si annulation
                 Navigator.pop(context, null); // Retourne null si annulé
               },
               child: const Text('Annuler'),
             ),
-            // Utiliser Builder pour gérer la validation et le pop en cas d'erreur
+            // Utiliser Builder pour gérer la validation et le SnackBar
             Builder(
               builder:
                   (innerContext) => ElevatedButton(
                     onPressed: () {
                       final address = _addressController.text.trim();
                       if (address.isEmpty) {
-                        // Utiliser un SnackBar ou un PopUp temporaire
-                        // Ne pas utiliser _showPopUp car cela interfère avec le dialogue actuel
+                        // Afficher un SnackBar pour l'erreur de validation
                         ScaffoldMessenger.of(innerContext).showSnackBar(
                           const SnackBar(
                             content: Text(
@@ -340,7 +348,8 @@ class _CartPageState extends State<CartPage> {
                           ),
                         );
                       } else {
-                        Navigator.pop(context, address); // Retourne l'adresse
+                        // Ferme le dialogue et retourne l'adresse
+                        Navigator.pop(context, address);
                       }
                     },
                     style: ElevatedButton.styleFrom(
@@ -356,13 +365,15 @@ class _CartPageState extends State<CartPage> {
     );
 
     if (deliveryAddress == null || deliveryAddress.isEmpty) {
-      // L'utilisateur a annulé ou n'a pas saisi d'adresse (la validation dans le dialogue gère l'adresse vide)
+      // L'utilisateur a annulé ou n'a pas réussi la validation d'adresse
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    }); // Afficher le loader pendant le checkout
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+      }); // Afficher le loader pendant le checkout
+    }
 
     // Envoi de l'ID utilisateur ET l'adresse à commande_api.php pour finaliser
     var url = Uri.parse("${globals.baseUrl}commande_api.php");
@@ -372,7 +383,6 @@ class _CartPageState extends State<CartPage> {
         url,
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
-          // Les données sont maintenant correctement gérées côté PHP
           "user_id": _currentUserId,
           "adresse_livraison": deliveryAddress,
         }),
@@ -405,7 +415,9 @@ class _CartPageState extends State<CartPage> {
           _isLoading = false;
         }); // Arrêter le loader
       }
-      _addressController.clear(); // Vider le champ après tentative
+      // Le contrôleur est clair à la fin du dialogue, mais on le vide à nouveau
+      // pour s'assurer qu'il est prêt pour la prochaine tentative si nécessaire.
+      _addressController.clear();
     }
   }
 
@@ -500,41 +512,69 @@ class _CartPageState extends State<CartPage> {
 
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
           child: ListTile(
-            leading: const Icon(Icons.fastfood, color: Colors.blueGrey),
+            contentPadding: const EdgeInsets.symmetric(
+              vertical: 8.0,
+              horizontal: 16.0,
+            ),
+            leading: const Icon(Icons.fastfood, color: Colors.deepOrange),
             title: Text(
               nom,
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
-            subtitle: Text(
-              'Prix Unitaire: ${prixUnitaire.toStringAsFixed(2)} €',
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Prix Unitaire: ${prixUnitaire.toStringAsFixed(2)} €',
+                  style: const TextStyle(color: Colors.grey),
+                ),
+                Text(
+                  'Sous-total: ${(prixUnitaire * quantite).toStringAsFixed(2)} €',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+              ],
             ),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Bouton de décrémentation
                 IconButton(
-                  icon: const Icon(Icons.remove, size: 20),
+                  icon: const Icon(Icons.remove, size: 20, color: Colors.red),
                   onPressed: () => _updateQuantity(platId, quantite - 1),
                 ),
-                Text(
-                  '$quantite',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.blueGrey.shade50,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    '$quantite',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 // Bouton d'incrémentation
                 IconButton(
-                  icon: const Icon(Icons.add, size: 20),
+                  icon: const Icon(Icons.add, size: 20, color: Colors.green),
                   onPressed: () => _updateQuantity(platId, quantite + 1),
                 ),
                 // Bouton de suppression directe (X)
                 IconButton(
-                  icon: const Icon(
-                    Icons.delete,
-                    color: Colors.red,
-                  ), // Assurer la couleur rouge
+                  icon: const Icon(Icons.delete, color: Colors.red),
                   onPressed: () => _deleteItem(platId),
                 ),
               ],
@@ -552,6 +592,9 @@ class _CartPageState extends State<CartPage> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
+        border: Border(
+          top: BorderSide(color: Colors.grey.shade300, width: 1.0),
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.grey.withOpacity(0.3),
@@ -575,7 +618,7 @@ class _CartPageState extends State<CartPage> {
               Text(
                 '${_totalAmount.toStringAsFixed(2)} €',
                 style: const TextStyle(
-                  fontSize: 20,
+                  fontSize: 22,
                   fontWeight: FontWeight.w900,
                   color: Colors.green,
                 ),
@@ -593,14 +636,13 @@ class _CartPageState extends State<CartPage> {
             ),
             style: ElevatedButton.styleFrom(
               backgroundColor:
-                  Theme.of(
-                    context,
-                  ).primaryColor, // Utiliser la couleur primaire du thème
+                  Theme.of(context).primaryColor, // Couleur primaire
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 15),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(10),
               ),
+              elevation: 5,
             ),
           ),
         ],

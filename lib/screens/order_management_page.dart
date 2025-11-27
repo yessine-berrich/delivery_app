@@ -60,6 +60,7 @@ class OrdersManagementPage extends StatefulWidget {
 }
 
 class _OrdersManagementPageState extends State<OrdersManagementPage> {
+  // Le statut sélectionné est géré par l'objet Commande lui-même
   List<Commande> _commandes = [];
   bool _isLoading = true;
   String? _error;
@@ -75,7 +76,8 @@ class _OrdersManagementPageState extends State<OrdersManagementPage> {
   // 1. Récupérer toutes les commandes (GET)
   Future<void> _fetchOrders() async {
     setState(() {
-      _isLoading = true;
+      // Afficher l'indicateur de chargement uniquement si la liste est vide (pour ne pas perturber l'utilisateur)
+      if (_commandes.isEmpty) _isLoading = true;
       _error = null;
     });
 
@@ -100,7 +102,6 @@ class _OrdersManagementPageState extends State<OrdersManagementPage> {
             'Échec de la récupération des commandes (Code: ${response.statusCode}).';
       }
     } on SocketException {
-      // Correction de la faute de frappe : 'inaccessible' au lieu de 'inaccésible'
       _error =
           'Erreur de connexion : L\'API est inaccessible ou l\'URL est incorrecte. (Vérifiez si l\'API PHP est active).';
     } catch (e) {
@@ -114,7 +115,7 @@ class _OrdersManagementPageState extends State<OrdersManagementPage> {
 
   // 2. Mettre à jour le statut d'une commande (PUT)
   Future<void> _updateOrderStatus(int commandeId, String nouveauStatut) async {
-    // Afficher une barre de progression locale (dans le corps)
+    // Afficher une barre de progression locale
     setState(() {
       _isLoading = true;
     });
@@ -129,18 +130,21 @@ class _OrdersManagementPageState extends State<OrdersManagementPage> {
       final result = json.decode(response.body);
 
       if (response.statusCode == 200 && result['status'] == 'success') {
-        _showSnackbar(result['message'], isError: false);
-        // Rafraîchir la liste après une mise à jour réussie
+        _showSnackbar(
+          result['message'] ?? 'Statut mis à jour avec succès.',
+          isError: false,
+        );
+        // Rafraîchir la liste après une mise à jour réussie pour recharger le statut du serveur
         await _fetchOrders();
       } else {
         _showSnackbar(
-          result['message'] ?? 'Échec de la mise à jour.',
+          result['message'] ?? 'Échec de la mise à jour du statut.',
           isError: true,
         );
       }
     } catch (e) {
       _showSnackbar(
-        'Erreur de connexion lors de la mise à jour.',
+        'Erreur de connexion lors de la mise à jour du statut.',
         isError: true,
       );
     } finally {
@@ -158,7 +162,8 @@ class _OrdersManagementPageState extends State<OrdersManagementPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
-          backgroundColor: isError ? Colors.red : Colors.green,
+          backgroundColor:
+              isError ? Colors.red.shade700 : Colors.green.shade700,
           duration: const Duration(seconds: 3),
         ),
       );
@@ -168,7 +173,7 @@ class _OrdersManagementPageState extends State<OrdersManagementPage> {
   Color _getStatusColor(String status) {
     switch (status) {
       case 'En attente':
-        return Colors.yellow.shade700;
+        return Colors.orange.shade700;
       case 'En préparation':
         return Colors.blue.shade700;
       case 'En livraison':
@@ -182,19 +187,41 @@ class _OrdersManagementPageState extends State<OrdersManagementPage> {
     }
   }
 
-  Widget _buildOrderCard(Commande commande, int index) {
+  // Crée un badge pour le statut
+  Widget _buildStatusBadge(String status, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color, width: 1.5),
+      ),
+      child: Text(
+        status,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w600,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOrderCard(Commande commande) {
     // Garder une référence locale pour le statut avant la mise à jour
     String currentSelectedStatus = commande.statut;
+    final statusColor = _getStatusColor(commande.statut);
 
     return Card(
       elevation: 4,
-      margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 10.0),
+      margin: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 15.0),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: _getStatusColor(commande.statut), width: 4),
+        borderRadius: BorderRadius.circular(15),
+        // Bordure qui met en évidence le statut
+        side: BorderSide(color: statusColor.withOpacity(0.7), width: 4),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -202,109 +229,145 @@ class _OrdersManagementPageState extends State<OrdersManagementPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Flexible(
-                  child: Text(
-                    'Commande n°${commande.id}', // Correction de la faute : # -> n°
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                      color: Colors.black87,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Commande n°${commande.id}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 20,
+                        color: Colors.black,
+                      ),
                     ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                    const SizedBox(height: 5),
+                    _buildStatusBadge(commande.statut, statusColor),
+                  ],
                 ),
                 Text(
                   '${commande.total.toStringAsFixed(2)} €',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                    color: _getStatusColor(commande.statut),
+                    fontSize: 24,
+                    color: statusColor,
                   ),
                 ),
               ],
             ),
-            const Divider(height: 10, thickness: 1),
+            const Divider(height: 25, thickness: 1),
 
             // Infos de base
-            Text(
-              'Utilisateur ID: ${commande.userId}',
-              style: const TextStyle(color: Colors.grey, fontSize: 14),
+            _buildDetailRow(
+              icon: Icons.person_outline,
+              label: 'Client ID',
+              value: '${commande.userId}',
+              color: Colors.grey.shade600,
             ),
-            const SizedBox(height: 4),
-            Text(
-              'Date: ${commande.date.split(' ')[0]} à ${commande.date.split(' ')[1]}', // Formattage simple de la date
-              style: const TextStyle(color: Colors.grey, fontSize: 14),
+            _buildDetailRow(
+              icon: Icons.calendar_today,
+              label: 'Date',
+              value:
+                  '${commande.date.split(' ')[0]} à ${commande.date.split(' ')[1].substring(0, 5)}',
+              color: Colors.grey.shade600,
             ),
-            const SizedBox(height: 12),
-            // Adresse de livraison - Correction : J'ai mis en gras le libellé pour le rendre plus visible
-            Text(
-              'Adresse de livraison : ${commande.address}', // Correction de la majuscule
-              style: const TextStyle(
-                fontWeight: FontWeight.bold, // Plus visible
-                color: Colors.black87,
-                fontSize: 15,
-              ),
-              softWrap:
-                  true, // S'assure que le texte s'enroule sur plusieurs lignes
+            const SizedBox(height: 15),
+
+            // Adresse de livraison
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.location_on_outlined,
+                  size: 20,
+                  color: Colors.indigo.shade600,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Adresse : ${commande.address}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                      fontSize: 15,
+                      height: 1.3,
+                    ),
+                    softWrap: true,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 15),
+
             // Détails des plats
             const Text(
-              'Plats commandés :', // Correction de la faute : j'ai ajouté un espace
+              'Plats commandés :',
               style: TextStyle(
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
                 color: Colors.black87,
               ),
             ),
             Container(
-              padding: const EdgeInsets.all(8),
-              margin: const EdgeInsets.only(top: 4, bottom: 12),
+              padding: const EdgeInsets.all(12),
+              margin: const EdgeInsets.only(top: 8, bottom: 20),
               width: double.infinity,
               decoration: BoxDecoration(
                 color: Colors.indigo.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.indigo.shade100),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.indigo.shade200, width: 1),
               ),
               child: Text(
                 // Remplace ' | ' par des retours à la ligne pour une meilleure lisibilité
                 commande.platsDetails.replaceAll(' | ', '\n'),
-                style: const TextStyle(fontSize: 14, height: 1.4),
-                softWrap: true, // S'assure que le contenu s'enroule
+                style: const TextStyle(
+                  fontSize: 14,
+                  height: 1.6,
+                  color: Colors.black87,
+                  fontFamily:
+                      'monospace', // Utilisation d'une police plus lisible pour la liste
+                ),
+                softWrap: true,
               ),
             ),
 
-            // Mise à jour du statut
+            // Mise à jour du statut (Barre d'action)
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    // Key pour forcer la mise à jour du Dropdown quand la liste est rechargée
                     key: ValueKey('${commande.id}-${commande.statut}'),
                     value: commande.statut,
                     decoration: InputDecoration(
-                      labelText: 'Statut Actuel',
-                      border: const OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(8)),
+                      labelText: 'Changer le statut',
+                      labelStyle: TextStyle(
+                        color: statusColor,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: statusColor, width: 2),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: BorderSide(color: statusColor, width: 2),
                       ),
                       contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 8,
+                        horizontal: 12,
+                        vertical: 10,
                       ),
                       isDense: true,
-                      labelStyle: TextStyle(
-                        color: _getStatusColor(commande.statut),
-                      ),
                     ),
                     items:
                         statusOptions.map((String status) {
+                          final itemColor = _getStatusColor(status);
                           return DropdownMenuItem<String>(
                             value: status,
                             child: Text(
                               status,
                               style: TextStyle(
-                                color: _getStatusColor(status),
-                                fontWeight: FontWeight.bold,
+                                color: itemColor,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           );
@@ -327,17 +390,17 @@ class _OrdersManagementPageState extends State<OrdersManagementPage> {
                     // Utiliser le statut potentiellement mis à jour localement
                     _updateOrderStatus(commande.id, currentSelectedStatus);
                   },
-                  icon: const Icon(Icons.send, size: 18),
+                  icon: const Icon(Icons.check_circle_outline, size: 20),
                   label: const Text('Valider'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.indigo.shade600,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 12,
+                      horizontal: 18,
+                      vertical: 14,
                     ),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     elevation: 5,
                   ),
@@ -350,13 +413,48 @@ class _OrdersManagementPageState extends State<OrdersManagementPage> {
     );
   }
 
+  // Widget utilitaire pour les lignes de détail
+  Widget _buildDetailRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5.0),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Text(
+            '$label : ',
+            style: TextStyle(
+              fontWeight: FontWeight.w500,
+              fontSize: 14,
+              color: Colors.grey.shade700,
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              color: Colors.black87,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Gestion des Commandes'),
-        backgroundColor: Colors.indigo,
+        backgroundColor: Colors.indigo.shade700,
         foregroundColor: Colors.white,
+        centerTitle: true,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -365,57 +463,97 @@ class _OrdersManagementPageState extends State<OrdersManagementPage> {
           ),
         ],
       ),
-      body:
-          _isLoading && _commandes.isEmpty
-              ? const Center(child: CircularProgressIndicator())
-              : _error != null
-              ? Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.cloud_off, color: Colors.red, size: 60),
-                      const SizedBox(height: 15),
-                      Text(
-                        // Correction de la faute : 'Connexion' au lieu de 'Connection'
-                        'Erreur de Connexion : $_error',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.red, fontSize: 16),
+      body: Stack(
+        children: [
+          // Gérer les états de chargement, d'erreur et de liste vide
+          if (_isLoading && _commandes.isEmpty)
+            const Center(child: CircularProgressIndicator(color: Colors.indigo))
+          else if (_error != null)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(30.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.cloud_off, color: Colors.red, size: 80),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Erreur de Connexion :',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.red,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
                       ),
-                      const SizedBox(height: 20),
-                      ElevatedButton.icon(
-                        onPressed: _fetchOrders,
-                        icon: const Icon(Icons.replay),
-                        label: const Text('Réessayer'),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-              : _commandes.isEmpty
-              ? const Center(
-                child: Text(
-                  'Aucune commande en cours.',
-                  style: TextStyle(fontSize: 18, color: Colors.grey),
-                ),
-              )
-              : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (_isLoading)
-                    const LinearProgressIndicator(color: Colors.indigo),
-
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: _commandes.length,
-                      itemBuilder: (context, index) {
-                        return _buildOrderCard(_commandes[index], index);
-                      },
                     ),
+                    const SizedBox(height: 10),
+                    Text(
+                      _error!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.red,
+                        fontSize: 16,
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 30),
+                    ElevatedButton.icon(
+                      onPressed: _fetchOrders,
+                      icon: const Icon(Icons.replay),
+                      label: const Text('Réessayer'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.indigo,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 30,
+                          vertical: 15,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else if (_commandes.isEmpty)
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.inbox_outlined,
+                    size: 80,
+                    color: Colors.grey.shade300,
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Aucune commande en attente de traitement.',
+                    style: TextStyle(fontSize: 18, color: Colors.grey),
                   ),
                 ],
               ),
+            )
+          else
+            // Affichage de la liste des commandes
+            ListView.builder(
+              itemCount: _commandes.length,
+              itemBuilder: (context, index) {
+                return _buildOrderCard(_commandes[index]);
+              },
+            ),
+
+          // Indicateur de progression linéaire pour les mises à jour
+          if (_isLoading && _commandes.isNotEmpty)
+            const Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: LinearProgressIndicator(color: Colors.indigo),
+            ),
+        ],
+      ),
     );
   }
 }
