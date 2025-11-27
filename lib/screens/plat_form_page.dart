@@ -142,6 +142,8 @@ class _PlatFormPageState extends State<PlatFormPage> {
     super.dispose();
   }
 
+  // ... (votre code jusqu'à _submitPlat) ...
+
   Future<void> _submitPlat() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -151,7 +153,8 @@ class _PlatFormPageState extends State<PlatFormPage> {
       _isSaving = true;
     });
 
-    if (_selectedImage == null && !_isEditing) {
+    // La vérification de l'image est correcte : image obligatoire seulement à la création
+    if (_selectedImage == null && !_isEditing && _initialPlat.image == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Veuillez sélectionner une image.")),
       );
@@ -160,23 +163,28 @@ class _PlatFormPageState extends State<PlatFormPage> {
     }
 
     try {
-      var request =
-          _isEditing
-              ? http.MultipartRequest('PUT', _apiUrl)
-              : http.MultipartRequest('POST', _apiUrl);
+      // ----------------------------------------------------------------------
+      // CHANGEMENT CLÉ : Utiliser POST pour l'édition et ajouter '_method=PUT'
+      // ----------------------------------------------------------------------
+      var request = http.MultipartRequest('POST', _apiUrl);
 
-      // Ajouter les champs du formulaire
+      // Si c'est une modification, nous ajoutons le champ '_method=PUT'
+      if (_isEditing) {
+        request.fields['_method'] = 'PUT';
+        request.fields['plat_id'] =
+            _initialPlat.id; // L'ID est essentiel pour l'UPDATE
+      }
+      // ----------------------------------------------------------------------
+
+      // Ajouter les champs du formulaire (identique pour POST et PUT simulé)
       request.fields['nom'] = _nomController.text;
       request.fields['description'] = _descriptionController.text;
-      request.fields['prix'] = (_prixController.text).toString();
+      // S'assurer que le prix est une chaîne valide pour le serveur
+      request.fields['prix'] = _prixController.text.replaceAll(',', '.');
       request.fields['categorie'] = _categorieController.text;
 
-      // Ajouter l'ID si c'est une modification
-      if (_isEditing) {
-        request.fields['plat_id'] = _initialPlat.id;
-      }
-
       // Ajouter l'image si sélectionnée
+      // Si _selectedImage est null en mode édition, l'ancienne image est conservée (logique PHP)
       if (_selectedImage != null) {
         request.files.add(
           await http.MultipartFile.fromPath(
@@ -191,7 +199,11 @@ class _PlatFormPageState extends State<PlatFormPage> {
       var response = await http.Response.fromStream(streamedResponse);
 
       final responseBody = json.decode(response.body);
-      if (response.statusCode == 200 && responseBody['status'] == 'success') {
+
+      // La vérification de la réussite est correcte
+      if (response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          responseBody['status'] == 'success') {
         _showPopUp(
           'Opération réussie',
           _isEditing
@@ -202,6 +214,7 @@ class _PlatFormPageState extends State<PlatFormPage> {
       } else {
         _showPopUp(
           'Erreur',
+          // Afficher le message d'erreur précis du serveur
           responseBody['message'] ?? 'Échec de l’opération.',
           color: Colors.red,
         );
@@ -216,6 +229,8 @@ class _PlatFormPageState extends State<PlatFormPage> {
       setState(() => _isSaving = false);
     }
   }
+
+  // ... (votre code continue) ...
 
   @override
   Widget build(BuildContext context) {
