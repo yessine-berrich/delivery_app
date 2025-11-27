@@ -13,6 +13,7 @@ class Plat {
   final String description;
   final double prix;
   final String categorie;
+  final String? image; // URL ou chemin de l'image
 
   Plat({
     required this.id,
@@ -20,6 +21,7 @@ class Plat {
     required this.description,
     required this.prix,
     required this.categorie,
+    required this.image,
   });
 
   // Factory constructor pour créer un Plat à partir d'un map JSON
@@ -32,6 +34,7 @@ class Plat {
       description: json['description'] ?? '',
       prix: double.tryParse(json['prix']?.toString() ?? '0.0') ?? 0.0,
       categorie: json['categorie'] ?? 'Divers',
+      image: json['image'] ?? null,
     );
   }
 }
@@ -176,7 +179,7 @@ class _PlatListPageState extends State<PlatListPage> {
     // Crée un objet Plat par défaut si plat est null (pour un ajout)
     final Plat platToPass =
         plat ??
-        Plat(id: '', nom: '', description: '', prix: 0.0, categorie: '');
+        Plat(id: '', nom: '', description: '', prix: 0.0, categorie: '', image: null);
 
     Navigator.pushNamed(context, '/plat_form', arguments: platToPass).then((
       result,
@@ -252,7 +255,10 @@ class _PlatListPageState extends State<PlatListPage> {
           margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 5),
           elevation: 3,
           child: ListTile(
-            leading: const Icon(Icons.restaurant, color: Colors.indigo),
+            // leading: const Icon(Icons.restaurant, color: Colors.indigo),
+            leading: Image.network(
+              "http://192.168.56.1/api_livraison/uploads/${plat.image}",
+            ),
             title: Text(
               plat.nom,
               style: const TextStyle(fontWeight: FontWeight.bold),

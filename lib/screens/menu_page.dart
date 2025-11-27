@@ -268,10 +268,14 @@ class _MenuPageState extends State<MenuPage> {
             plat['description'] ?? 'Description non disponible.';
         final double prix =
             double.tryParse(plat['prix']?.toString() ?? '0.0') ?? 0.0;
+        final String? image = plat['image'];
 
         return ListTile(
           // Icône pour le visuel
-          leading: const Icon(Icons.fastfood, color: Colors.deepOrange),
+          // leading: const Icon(Icons.fastfood, color: Colors.deepOrange),
+          leading: Image.network(
+            "http://192.168.56.1/api_livraison/uploads/${image}",
+          ),
 
           title: Text(
             nom,

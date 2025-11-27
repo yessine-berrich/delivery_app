@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import '../../globals.dart' as globals;
 // Importez la classe Plat qui se trouve dans plat_list_page.dart
 import 'plat_list_page.dart';
@@ -29,6 +32,19 @@ class _PlatFormPageState extends State<PlatFormPage> {
   bool _isInit = false;
 
   final Uri _apiUrl = Uri.parse("${globals.baseUrl}plat_api.php");
+
+  File? _selectedImage;
+
+  Future<void> _pickImage() async {
+    final pickedFile = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+    );
+    if (pickedFile != null) {
+      setState(() {
+        _selectedImage = File(pickedFile.path);
+      });
+    }
+  }
 
   // --------------------------------------------------------------------------
   // Utilitaire : Fenêtre Pop-up
@@ -63,6 +79,7 @@ class _PlatFormPageState extends State<PlatFormPage> {
     );
   }
 
+  String? _existingImageUrl;
   // Initialisation des contrôleurs avec les valeurs du Plat reçu
   @override
   void didChangeDependencies() {
@@ -82,11 +99,17 @@ class _PlatFormPageState extends State<PlatFormPage> {
                 description: '',
                 prix: 0.0,
                 categorie: '',
+                image: null,
               );
 
       // Configuration de l'état
       _isEditing = (plat.id.isNotEmpty);
       _initialPlat = plat;
+
+      if (_isEditing && _initialPlat.image != null) {
+        // Nous construisons l'URL complète pour l'affichage réseau
+        _existingImageUrl = "${globals.baseUrl}uploads/${_initialPlat.image}";
+      }
 
       // Initialisation des contrôleurs
       _nomController = TextEditingController(text: _initialPlat.nom);
@@ -119,7 +142,6 @@ class _PlatFormPageState extends State<PlatFormPage> {
     super.dispose();
   }
 
-  // --- LOGIQUE DE SAUVEGARDE (AJOUT POST ou MODIFICATION PUT) ---
   Future<void> _submitPlat() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -129,65 +151,69 @@ class _PlatFormPageState extends State<PlatFormPage> {
       _isSaving = true;
     });
 
-    final payloadData = {
-      'nom': _nomController.text,
-      'description': _descriptionController.text,
-      // Convertir le texte en double, ou 0.0 si invalide
-      'prix': double.tryParse(_prixController.text) ?? 0.0,
-      'categorie': _categorieController.text,
-    };
-
-    http.Response response;
-    String successMessage;
+    if (_selectedImage == null && !_isEditing) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Veuillez sélectionner une image.")),
+      );
+      setState(() => _isSaving = false);
+      return;
+    }
 
     try {
+      var request =
+          _isEditing
+              ? http.MultipartRequest('PUT', _apiUrl)
+              : http.MultipartRequest('POST', _apiUrl);
+
+      // Ajouter les champs du formulaire
+      request.fields['nom'] = _nomController.text;
+      request.fields['description'] = _descriptionController.text;
+      request.fields['prix'] = (_prixController.text).toString();
+      request.fields['categorie'] = _categorieController.text;
+
+      // Ajouter l'ID si c'est une modification
       if (_isEditing) {
-        // MODIFICATION (PUT) : On inclut l'ID du plat dans le corps de la requête
-        final payload = {...payloadData, 'plat_id': _initialPlat.id};
-        response = await http.put(
-          _apiUrl,
-          headers: {'Content-Type': 'application/json'},
-          body: json.encode(payload),
-        );
-        successMessage = 'Plat modifié avec succès !';
-      } else {
-        // AJOUT (POST)
-        response = await http.post(
-          _apiUrl,
-          headers: {'Content-Type': 'application/json'},
-          body: json.encode(payloadData),
-        );
-        successMessage = 'Nouveau plat ajouté avec succès !';
+        request.fields['plat_id'] = _initialPlat.id;
       }
+
+      // Ajouter l'image si sélectionnée
+      if (_selectedImage != null) {
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'item_image', // nom du champ côté serveur
+            _selectedImage!.path,
+          ),
+        );
+      }
+
+      // Envoyer la requête
+      var streamedResponse = await request.send();
+      var response = await http.Response.fromStream(streamedResponse);
 
       final responseBody = json.decode(response.body);
-
       if (response.statusCode == 200 && responseBody['status'] == 'success') {
-        // Succès : afficher la pop-up
-        // Le Navigator.pop(context, true) est maintenant dans la fonction _showPopUp
-        _showPopUp('Opération réussie', successMessage, color: Colors.green);
+        _showPopUp(
+          'Opération réussie',
+          _isEditing
+              ? 'Plat modifié avec succès !'
+              : 'Nouveau plat ajouté avec succès !',
+          color: Colors.green,
+        );
       } else {
-        // Échec de l'opération API
-        // Utiliser la pop-up pour les erreurs aussi, pour la cohérence
-        // _showPopUp(
-        //   'Erreur de sauvegarde',
-        //   responseBody['message'] ??
-        //       'Opération échouée. Statut: ${response.statusCode}',
-        //   color: Colors.red,
-        // );
-        _showPopUp('Opération réussie', successMessage, color: Colors.green);
+        _showPopUp(
+          'Erreur',
+          responseBody['message'] ?? 'Échec de l’opération.',
+          color: Colors.red,
+        );
       }
     } catch (e) {
-      // Erreur de connexion
       _showPopUp(
-        'Erreur de réseau',
-        'Erreur de connexion : $e',
+        'Erreur réseau',
+        'Impossible de contacter le serveur : $e',
         color: Colors.red,
       );
     } finally {
-      setState(() {
-        _isSaving = false;
-      });
+      setState(() => _isSaving = false);
     }
   }
 
@@ -208,6 +234,42 @@ class _PlatFormPageState extends State<PlatFormPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: <Widget>[
+                      // --- BLOC D'AFFICHAGE DE L'IMAGE CORRIGÉ ---
+                      if (_selectedImage != null)
+                        // 1. Si une NOUVELLE image est sélectionnée, l'afficher
+                        Image.file(
+                          _selectedImage!,
+                          height: 200,
+                          fit: BoxFit.cover,
+                        )
+                      else if (_isEditing && _existingImageUrl != null)
+                        // 2. Si c'est une MODIFICATION et qu'il existe une image existante, l'afficher via NetworkImage
+                        Image.network(
+                          _existingImageUrl!,
+                          height: 200,
+                          fit: BoxFit.cover,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return const SizedBox(
+                              height: 200,
+                              child: Center(child: CircularProgressIndicator()),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) {
+                            return const SizedBox(
+                              height: 200,
+                              child: Center(
+                                child: Icon(Icons.broken_image, size: 50),
+                              ),
+                            );
+                          },
+                        ),
+                      TextButton.icon(
+                        onPressed: _pickImage,
+                        icon: const Icon(Icons.image),
+                        label: const Text('Choisir une image'),
+                      ),
+
                       // Champ Nom
                       TextFormField(
                         controller: _nomController,
